@@ -9,13 +9,15 @@ fixtures = [
     {
         "dt": "Custom Field",
         "filters": [
-            ["dt", "in", ["Quotation", "Quotation Item"]]
+            ["dt", "in", ["Quotation", "Quotation Item"]],
+            ["module", "=", "custom_quotation"]
         ]
     },
     {
         "dt": "Property Setter",
         "filters": [
-            ["doc_type", "in", ["Quotation", "Quotation Item"]]
+            ["doc_type", "in", ["Quotation", "Quotation Item"]],
+            ["module", "=", "custom_quotation"]
         ]
     }
 ]
