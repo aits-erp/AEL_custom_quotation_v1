@@ -5,6 +5,21 @@ app_description = "custom quotation"
 app_email = "nikhil@aitsind.com"
 app_license = "mit"
 
+fixtures = [
+    {
+        "dt": "Custom Field",
+        "filters": [
+            ["dt", "in", ["Quotation", "Quotation Item"]]
+        ]
+    },
+    {
+        "dt": "Property Setter",
+        "filters": [
+            ["doc_type", "in", ["Quotation", "Quotation Item"]]
+        ]
+    }
+]
+
 # Apps
 # ------------------
 
