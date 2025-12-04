@@ -5,15 +5,25 @@ app_description = "custom quotation"
 app_email = "nikhil@aitsind.com"
 app_license = "mit"
 
+doctype_js = {
+    "Quotation": "public/js/quotation.js"
+}
+
 fixtures = [
     {
         "dt": "Custom Field",
         "filters": [
-            ["dt", "in", ["Quotation", "Quotation Item"]],
+            ["module", "=", "custom_quotation"]
+        ]
+    },
+    {
+        "dt": "Property Setter",
+        "filters": [
             ["module", "=", "custom_quotation"]
         ]
     }
 ]
+
 
 # Apps
 # ------------------
