@@ -23,7 +23,7 @@ class Quotation(Document):
             rate = item.rate or 0
             exchange_rate = item.custom_exchange_rate or 1
 
-            item.custom_total = gross_weight * rate
+            #item.custom_total = gross_weight * rate
             item.custom_total_value = item.custom_total * exchange_rate
             item.custom_total_in_inr = item.custom_total_value
 
@@ -53,13 +53,23 @@ class Quotation(Document):
     # -----------------------------------------------------------
     # PARENT TOTALS (CBM + GROSS WEIGHT)
     # -----------------------------------------------------------
-    def update_dimension_totals(self):
-        total_cbm = 0.0
-        total_weight = 0.0
+        def update_dimension_totals(self):
+            total_cbm = 0.0
+            total_weight = 0.0
 
-        for row in (self.custom_dimension_details or []):
-            total_cbm += (row.custom_cbm or 0)
-            total_weight += (row.weight_kg or 0)
+            for row in (self.custom_dimension_details or []):
+                total_cbm += (row.custom_cbm or 0)
+                total_weight += (row.weight_kg or 0)
 
-        self.custom_totals_in_cbm = total_cbm
-        self.custom_gross_weight = total_weight
+            # Existing parent fields
+            self.custom_totals_in_cbm = total_cbm
+            self.custom_gross_weight = total_weight
+
+            # Newly requested mirror fields
+            self.custom_total_cbm = total_cbm
+            self.custom_total_weight = total_weight
+
+            # Already existing total fields
+            self.custom_total_no_of_boxes = sum((row.number_of_boxes or 0) for row in (self.custom_dimension_details or []))
+            self.custom_total_volume_weight = sum((row.volume_weight or 0) for row in (self.custom_dimension_details or []))
+
