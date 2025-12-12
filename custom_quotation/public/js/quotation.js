@@ -123,6 +123,9 @@ function update_dimension_totals(frm) {
         total_volume_weight += flt(row.volume_weight || 0);
     });
 
+    // Round to 2 decimals to avoid 1.0000000002 issues
+    total_cbm = flt(total_cbm, 2);
+
     // Update parent fields (exact fieldnames used here)
     frm.set_value("custom_total_no_of_boxes", total_boxes);           // total boxes (parent)
     frm.set_value("custom_totals_in_cbm", total_cbm);                // existing: total CBM
@@ -134,6 +137,30 @@ function update_dimension_totals(frm) {
     // Trigger recalculation of item totals because gross weight changed
     frappe.ui.form.trigger("Quotation", "custom_gross_weight");
 }
+
+//total inr
+frappe.ui.form.on("Quotation Item", {
+    custom_total_in_inr(frm) {
+        update_custom_total(frm);
+    }
+});
+
+frappe.ui.form.on("Quotation", {
+    refresh(frm) {
+        update_custom_total(frm);
+    }
+});
+
+function update_custom_total(frm) {
+    let total = 0;
+
+    (frm.doc.items || []).forEach(row => {
+        total += flt(row.custom_total_in_inr || 0);
+    });
+
+    frm.set_value("total", total);
+}
+
 
 
 //VERSION 1.0

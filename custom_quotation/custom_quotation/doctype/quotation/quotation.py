@@ -1,5 +1,6 @@
 import frappe
 from frappe.model.document import Document
+from frappe.utils import flt
 
 class Quotation(Document):
 
@@ -12,6 +13,9 @@ class Quotation(Document):
 
         # Parent totals
         self.update_dimension_totals()
+
+        # MUST be last so ERPNext does not overwrite it later
+        self.override_custom_total()
 
     # -----------------------------------------------------------
     # ITEM TOTAL CALCULATIONS (UNCHANGED)
@@ -53,23 +57,32 @@ class Quotation(Document):
     # -----------------------------------------------------------
     # PARENT TOTALS (CBM + GROSS WEIGHT)
     # -----------------------------------------------------------
-        def update_dimension_totals(self):
-            total_cbm = 0.0
-            total_weight = 0.0
+    def update_dimension_totals(self):
+        total_cbm = 0.0
+        total_weight = 0.0
 
-            for row in (self.custom_dimension_details or []):
-                total_cbm += (row.custom_cbm or 0)
-                total_weight += (row.weight_kg or 0)
+        for row in (self.custom_dimension_details or []):
+            total_cbm += (row.custom_cbm or 0)
+            total_weight += (row.weight_kg or 0)
 
-            # Existing parent fields
-            self.custom_totals_in_cbm = total_cbm
-            self.custom_gross_weight = total_weight
+        # Round total_cbm to 2 decimals to avoid floating artefacts
+        total_cbm = flt(total_cbm, 2)
+        
+        # Existing parent fields
+        self.custom_totals_in_cbm = total_cbm
+        self.custom_gross_weight = total_weight
 
-            # Newly requested mirror fields
-            self.custom_total_cbm = total_cbm
-            self.custom_total_weight = total_weight
+        # Newly requested mirror fields
+        self.custom_total_cbm = total_cbm
+        self.custom_total_weight = total_weight
 
-            # Already existing total fields
-            self.custom_total_no_of_boxes = sum((row.number_of_boxes or 0) for row in (self.custom_dimension_details or []))
-            self.custom_total_volume_weight = sum((row.volume_weight or 0) for row in (self.custom_dimension_details or []))
+        # Already existing total fields
+        self.custom_total_no_of_boxes = sum((row.number_of_boxes or 0) for row in (self.custom_dimension_details or []))
+        self.custom_total_volume_weight = sum((row.volume_weight or 0) for row in (self.custom_dimension_details or []))
 
+
+    def override_custom_total(self):
+        """Override standard TOTAL with sum of custom_total_in_inr"""
+        total_custom = sum((item.custom_total_in_inr or 0) for item in self.items)
+        # Override only the 'total' field as requested
+        self.total = total_custom
