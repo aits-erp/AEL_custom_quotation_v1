@@ -3,7 +3,7 @@ from frappe.model.document import Document
 from frappe.utils import flt
 
 class Quotation(Document):
-
+            
     def validate(self):
         # Item totals
         self.update_custom_item_totals()
@@ -14,8 +14,8 @@ class Quotation(Document):
         # Parent totals
         self.update_dimension_totals()
 
-        # MUST be last so ERPNext does not overwrite it later
-        self.override_custom_total()
+        self.update_custom_total_parent()
+        
 
     # -----------------------------------------------------------
     # ITEM TOTAL CALCULATIONS (UNCHANGED)
@@ -27,7 +27,7 @@ class Quotation(Document):
             rate = item.rate or 0
             exchange_rate = item.custom_exchange_rate or 1
 
-            #item.custom_total = gross_weight * rate
+            item.custom_total = gross_weight * rate
             item.custom_total_value = item.custom_total * exchange_rate
             item.custom_total_in_inr = item.custom_total_value
 
@@ -81,8 +81,14 @@ class Quotation(Document):
         self.custom_total_volume_weight = sum((row.volume_weight or 0) for row in (self.custom_dimension_details or []))
 
 
-    def override_custom_total(self):
-        """Override standard TOTAL with sum of custom_total_in_inr"""
-        total_custom = sum((item.custom_total_in_inr or 0) for item in self.items)
-        # Override only the 'total' field as requested
-        self.total = total_custom
+    def update_custom_total_parent(self):
+        """
+        Calculate parent-level custom_total as
+        sum of item.custom_total_in_inr
+        """
+        total = 0.0
+
+        for item in self.items:
+            total += flt(item.custom_total_in_inr or 0)
+
+        self.custom_total_inr = total

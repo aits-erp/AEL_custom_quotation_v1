@@ -7,27 +7,43 @@ frappe.ui.form.on("Quotation Item", {
     },
     custom_exchange_rate(frm, cdt, cdn) {
         calculate_custom_totals(frm, cdt, cdn);
+    },
+    items_add(frm, cdt, cdn) {
+        calculate_custom_totals(frm, cdt, cdn);
     }
 });
+
+// frappe.ui.form.on("Quotation", {
+//     custom_gross_weight(frm) {
+//         (frm.doc.items || []).forEach(item => {
+//             calculate_custom_totals(frm, "Quotation Item", item.name);
+//         });
+//         frm.refresh_field("items");
+//     },
+
+//     // Also recalc totals when the form is refreshed/loaded
+//     refresh(frm) {
+//         // calculate for existing dimension rows
+//         (frm.doc.custom_dimension_details || []).forEach(row => {
+//             calculate_dimension_row(frm, "Quotation Dimension Detail", row.name);
+//         });
+//         // ensure totals are up-to-date on load
+//         update_dimension_totals(frm);
+//     }
+// });
 
 frappe.ui.form.on("Quotation", {
     custom_gross_weight(frm) {
-        (frm.doc.items || []).forEach(item => {
-            calculate_custom_totals(frm, "Quotation Item", item.name);
-        });
-        frm.refresh_field("items");
-    },
+        if (frm.is_saving) return; // 🔒 critical guard
 
-    // Also recalc totals when the form is refreshed/loaded
-    refresh(frm) {
-        // calculate for existing dimension rows
-        (frm.doc.custom_dimension_details || []).forEach(row => {
-            calculate_dimension_row(frm, "Quotation Dimension Detail", row.name);
+        (frm.doc.items || []).forEach(item => {
+            if (item && item.name) {
+                calculate_custom_totals(frm, "Quotation Item", item.name);
+            }
         });
-        // ensure totals are up-to-date on load
-        update_dimension_totals(frm);
     }
 });
+
 
 function calculate_custom_totals(frm, cdt, cdn) {
     let row = locals[cdt][cdn];
@@ -35,11 +51,11 @@ function calculate_custom_totals(frm, cdt, cdn) {
     let rate = row.rate || 0;
     let exchange_rate = row.custom_exchange_rate || 1;
 
-    //row.custom_total = gross_weight * rate;
+    row.custom_total = gross_weight * rate;
     row.custom_total_value = row.custom_total * exchange_rate;
     row.custom_total_in_inr = row.custom_total_value;
 
-    frm.refresh_field("items");
+    // frm.refresh_field("items");
 }
 
 // =======================================================
@@ -135,31 +151,57 @@ function update_dimension_totals(frm) {
     frm.set_value("custom_total_volume_weight", total_volume_weight);// total volume weight
 
     // Trigger recalculation of item totals because gross weight changed
-    frappe.ui.form.trigger("Quotation", "custom_gross_weight");
+    // frappe.ui.form.trigger("Quotation", "custom_gross_weight");
 }
 
-//total inr
-frappe.ui.form.on("Quotation Item", {
-    custom_total_in_inr(frm) {
-        update_custom_total(frm);
-    }
-});
+// ================================
+// CUSTOM PARENT TOTAL (UI ONLY)
+// ================================
 
 frappe.ui.form.on("Quotation", {
     refresh(frm) {
-        update_custom_total(frm);
+        update_custom_total_parent(frm);
     }
 });
 
-function update_custom_total(frm) {
+frappe.ui.form.on("Quotation Item", {
+    custom_total_in_inr(frm) {
+        update_custom_total_parent(frm);
+    },
+    rate(frm) {
+        update_custom_total_parent(frm);
+    },
+    custom_exchange_rate(frm) {
+        update_custom_total_parent(frm);
+    },
+    items_add(frm) {
+        update_custom_total_parent(frm);
+    },
+    items_remove(frm) {
+        update_custom_total_parent(frm);
+    }
+});
+
+function update_custom_total_parent(frm) {
     let total = 0;
 
-    (frm.doc.items || []).forEach(row => {
-        total += flt(row.custom_total_in_inr || 0);
+    (frm.doc.items || []).forEach(item => {
+        total += flt(item.custom_total_in_inr || 0);
     });
 
-    frm.set_value("total", total);
+    // update ONLY your custom field
+    frm.set_value("custom_total_inr", total);
 }
+
+
+// frappe.ui.form.on("Quotation", {
+//     refresh(frm) {
+//         update_custom_total(frm);
+//     }
+// });
+
+//     frm.set_value("total", total);
+// }
 
 
 
