@@ -1,30 +1,34 @@
 import frappe
 from frappe.model.document import Document
+from frappe.model.mapper import get_mapped_doc
 from frappe.utils import flt
 
 class Quotation(Document):
 
     def validate(self):
-        # 1. Dimension rows
+        # 1. Dimension row calculations
         self.update_dimension_rows()
 
         # 2. Parent dimension totals
         self.update_dimension_totals()
 
-        # 3. Item calculations (formula OR manual)
+        # 3. Item-level business calculations
         self.update_custom_item_totals()
 
-        # 4. Parent INR total
+        # 4. Push final INR value into standard rate
+        self.sync_standard_rate_from_custom_total()
+
+        # 5. Parent custom INR total (for reference / print)
         self.update_custom_total_parent()
 
     # -----------------------------------------------------------
-    # ITEM TOTAL CALCULATIONS (FORMULA + MANUAL SAFE)
+    # ITEM TOTAL CALCULATIONS (BUSINESS LOGIC)
     # -----------------------------------------------------------
     def update_custom_item_totals(self):
         mode = (self.custom_mode or "").upper()
 
         for item in self.items:
-            rate = flt(item.rate or 0)
+            user_rate = flt(item.custom_custom_rate or 0)
             exchange_rate = flt(item.custom_exchange_rate or 1)
 
             # ---------- FORMULA PATH ----------
@@ -32,26 +36,22 @@ class Quotation(Document):
                 calculated = None
 
                 if mode in ("SEA - LCL IMPORT", "SEA - LCL EXPORT"):
-                    calculated = flt(self.custom_total_cbm) * rate
+                    calculated = flt(self.custom_total_cbm) * user_rate
 
                 elif mode in ("AIR - IMPORT", "AIR - EXPORT"):
                     chargeable_weight = max(
                         flt(self.custom_total_weight),
                         flt(self.custom_total_volume_weight)
                     )
-                    calculated = chargeable_weight * rate
-
-                else:
-                    frappe.msgprint(
-                        f"No auto formula defined for mode '{self.custom_mode}'. "
-                        "Please enter Custom Total manually.",
-                        alert=True
-                    )
+                    calculated = chargeable_weight * user_rate
 
                 if calculated is not None:
                     item.custom_total = calculated
 
-            # ---------- INR CALCULATION (ALWAYS) ----------
+            # ---------- MANUAL PATH ----------
+            # If custom_formula is OFF, user is expected to manually enter custom_total
+
+            # ---------- INR CONVERSION ----------
             item.custom_total_value = flt(item.custom_total or 0) * exchange_rate
             item.custom_total_in_inr = item.custom_total_value
 
@@ -98,7 +98,23 @@ class Quotation(Document):
         self.custom_total_no_of_boxes = total_boxes
 
     # -----------------------------------------------------------
-    # PARENT INR TOTAL
+    # 🔑 SYNC STANDARD RATE (REPORT-SAFE)
+    # -----------------------------------------------------------
+    def sync_standard_rate_from_custom_total(self):
+        """
+        Push final business INR value into standard rate
+        so ERPNext reports, totals, SO, SI remain correct.
+        Qty is untouched.
+        """
+        for item in self.items:
+            final_inr = flt(item.custom_total_in_inr or 0)
+
+            # Do not force rate if value is zero
+            if final_inr:
+                item.rate = final_inr
+
+    # -----------------------------------------------------------
+    # PARENT CUSTOM INR TOTAL (REFERENCE)
     # -----------------------------------------------------------
     def update_custom_total_parent(self):
         self.custom_total_inr = sum(
@@ -107,97 +123,77 @@ class Quotation(Document):
         )
 
 
+def map_parent_fields(source, target, source_parent=None):
+    """
+    Centralized parent field mapping.
+    Safe for ERPNext postprocess signature.
+    """
 
-# import frappe
-# from frappe.model.document import Document
-# from frappe.utils import flt
+    FIELD_MAP = {
+        # -------- WEIGHT --------
+        "custom_gross_weight": "custom_gross_wt",
 
-# class Quotation(Document):
-            
-#     def validate(self):
-#         # Item totals
-#         self.update_custom_item_totals()
+        # -------- PORTS --------
+        "custom_pol": "custom_pol_aol",
+        "custom_pod": "custom_pod_aod",
 
-#         # Dimension row calculations
-#         self.update_dimension_rows()
+        # -------- DATES --------
+        "custom_eta": "custom_eta",
+        "custom_etd": "custom_etd",
 
-#         # Parent totals
-#         self.update_dimension_totals()
+        # -------- COUNTRY --------
+        "custom_country_of_origin": "custom_country_origin",
+        "party_name": "custom_consignee",
 
-#         self.update_custom_total_parent()
+        "custom_total_cbm": "custom_cbm",
+        "custom_total_no_of_boxes": "custom_no_of_pkgs",
 
-#     # -----------------------------------------------------------
-#     # ITEM TOTAL CALCULATIONS (UNCHANGED)
-#     # -----------------------------------------------------------
-#     def update_custom_item_totals(self):
-#         gross_weight = self.custom_gross_weight or 0
+    }
 
-#         for item in self.items:
-#             rate = item.rate or 0
-#             exchange_rate = item.custom_exchange_rate or 1
-
-#             item.custom_total = gross_weight * rate
-#             item.custom_total_value = item.custom_total * exchange_rate
-#             item.custom_total_in_inr = item.custom_total_value
-
-#     # -----------------------------------------------------------
-#     # DIMENSION ROW CALCULATION
-#     # -----------------------------------------------------------
-#     def update_dimension_rows(self):
-#         mode = (self.custom_mode or "").upper()
-
-#         for row in (self.custom_dimension_details or []):
-#             L = row.length_cm or 0
-#             B = row.breadth_cm or 0
-#             H = row.dim_height_cm or 0
-#             boxes = row.number_of_boxes or 1
-
-#             # CBM
-#             row.custom_cbm = (L * B * H / 1000000.0) * boxes
-
-#             # Volume weight
-#             if mode.startswith("COURIER"):
-#                 divisor = 5000.0
-#             else:
-#                 divisor = 6000.0
-
-#             row.volume_weight = (L * B * H / divisor) * boxes
-
-#     # -----------------------------------------------------------
-#     # PARENT TOTALS (CBM + GROSS WEIGHT)
-#     # -----------------------------------------------------------
-#     def update_dimension_totals(self):
-#         total_cbm = 0.0
-#         total_weight = 0.0
-
-#         for row in (self.custom_dimension_details or []):
-#             total_cbm += (row.custom_cbm or 0)
-#             total_weight += (row.weight_kg or 0)
-
-#         # Round total_cbm to 2 decimals to avoid floating artefacts
-#         total_cbm = flt(total_cbm, 2)
-        
-#         # Existing parent fields
-#         self.custom_totals_in_cbm = total_cbm
-#         self.custom_gross_weight = total_weight
-
-#         # Newly requested mirror fields
-#         self.custom_total_cbm = total_cbm
-#         self.custom_total_weight = total_weight
-
-#         # Already existing total fields
-#         self.custom_total_no_of_boxes = sum((row.number_of_boxes or 0) for row in (self.custom_dimension_details or []))
-#         self.custom_total_volume_weight = sum((row.volume_weight or 0) for row in (self.custom_dimension_details or []))
+    for src_field, tgt_field in FIELD_MAP.items():
+        if hasattr(source, src_field) and hasattr(target, tgt_field):
+            target.set(tgt_field, source.get(src_field))
 
 
-#     def update_custom_total_parent(self):
-#         """
-#         Calculate parent-level custom_total as
-#         sum of item.custom_total_in_inr
-#         """
-#         total = 0.0
+@frappe.whitelist()
+def make_sales_order(source_name, target_doc=None):
 
-#         for item in self.items:
-#             total += flt(item.custom_total_in_inr or 0)
+    def map_dimension_child(source_row, target_row, source_parent):
+        target_row.no_of_boxes = source_row.number_of_boxes
+        target_row.length_cm = source_row.length_cm
+        target_row.breadth_cm = source_row.breadth_cm
+        target_row.height_cm = source_row.dim_height_cm
+        target_row.weight_kg = source_row.weight_kg
+        target_row.volume_weight = source_row.volume_weight
+        target_row.cbm = flt(source_row.custom_cbm or 0)
 
-#         self.custom_total_inr = total
+    doc = get_mapped_doc(
+        "Quotation",
+        source_name,
+        {
+            # -------- Parent --------
+            "Quotation": {
+                "doctype": "Sales Order",
+                "postprocess": map_parent_fields,   # 👈 ONLY ADDITION
+            },
+
+            # -------- ITEMS --------
+            "Quotation Item": {
+                "doctype": "Sales Order Item",
+                "field_map": {
+                    "name": "quotation_item",
+                    "parent": "quotation",
+                },
+            },
+
+            # -------- DIMENSION TABLE --------
+            "Quotation Dimension Detail": {
+                "doctype": "SO Dimension details",
+                "parent_field": "custom_dimension_table",
+                "postprocess": map_dimension_child,
+            },
+        },
+        target_doc,
+    )
+
+    return doc

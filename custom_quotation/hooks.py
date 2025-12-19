@@ -24,6 +24,12 @@ fixtures = [
     }
 ]
 
+override_whitelisted_methods = {
+    "erpnext.selling.doctype.quotation.quotation.make_sales_order":
+        "custom_quotation.custom_quotation.doctype.quotation.quotation.make_sales_order"
+}
+
+
 
 # Apps
 # ------------------
