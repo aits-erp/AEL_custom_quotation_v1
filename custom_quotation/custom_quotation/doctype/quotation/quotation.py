@@ -147,6 +147,7 @@ def map_parent_fields(source, target, source_parent=None):
 
         "custom_total_cbm": "custom_cbm",
         "custom_total_no_of_boxes": "custom_no_of_pkgs",
+        "party_name": "customer",
 
     }
 
