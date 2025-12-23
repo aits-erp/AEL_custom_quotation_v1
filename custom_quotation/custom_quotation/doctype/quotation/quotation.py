@@ -148,7 +148,6 @@ def map_parent_fields(source, target, source_parent=None):
         "custom_total_cbm": "custom_cbm",
         "custom_total_no_of_boxes": "custom_no_of_pkgs",
         "party_name": "customer",
-
     }
 
     for src_field, tgt_field in FIELD_MAP.items():
@@ -184,6 +183,7 @@ def make_sales_order(source_name, target_doc=None):
                 "field_map": {
                     "name": "quotation_item",
                     "parent": "quotation",
+                    "custom_formula": "custom_formulaa",
                 },
             },
 
